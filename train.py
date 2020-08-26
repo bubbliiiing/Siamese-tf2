@@ -25,6 +25,10 @@ def get_image_num(path, train_own_data):
                 num += len(os.listdir(character_path))
     return num
 
+gpus = tf.config.experimental.list_physical_devices(device_type='GPU')
+for gpu in gpus:
+    tf.config.experimental.set_memory_growth(gpu, True)
+
 if __name__ == "__main__":
     input_shape = [105,105,3]
     dataset_path = "./datasets"
