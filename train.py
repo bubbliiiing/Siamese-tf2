@@ -4,6 +4,7 @@ from nets.siamese_training_own_dataset import Generator as Generator_own_dataset
 from tensorflow.keras.callbacks import TensorBoard, ReduceLROnPlateau, EarlyStopping
 from tensorflow.keras.optimizers import Adam, SGD
 from utils.utils import ModelCheckpoint
+import tensorflow as tf
 import os
 
 def get_image_num(path, train_own_data):
