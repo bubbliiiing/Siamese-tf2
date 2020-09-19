@@ -116,14 +116,20 @@ class Generator:
             image = np.asarray(image).astype(np.float64)
             # cv2.imwrite("img/"+str(pair)+"_0"+".jpg",np.uint8(image),)
             image = image / 255
-            pairs_of_images[0][pair, :, :, 0] = image
+            if self.channel == 1:
+                pairs_of_images[0][pair, :, :, 0] = image
+            else:
+                pairs_of_images[0][pair, :, :, :] = image
 
             image = Image.open(path_list[pair * 2 + 1])
             image = self.get_random_data(image, [self.image_height, self.image_width])
             image = np.asarray(image).astype(np.float64)
             # cv2.imwrite("img/"+str(pair)+"_1"+".jpg",np.uint8(image),)
             image = image / 255
-            pairs_of_images[1][pair, :, :, 0] = image
+            if self.channel == 1:
+                pairs_of_images[1][pair, :, :, 0] = image
+            else:
+                pairs_of_images[1][pair, :, :, :] = image
             if (pair + 1) % 2 == 0:
                 labels[pair] = 0
             else:
