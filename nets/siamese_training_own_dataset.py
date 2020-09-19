@@ -20,9 +20,6 @@ class Generator:
         self._train_chapters = []
         self._validation_chapters = []
 
-        self._current_train_alphabet_index = 0
-        self._current_val_alphabet_index = 0
-
         self.train_ratio = train_ratio
 
         self.load_dataset()
