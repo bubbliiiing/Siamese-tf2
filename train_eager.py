@@ -12,19 +12,22 @@ from nets.siamese_training import Generator
 from nets.siamese_training_own_dataset import Generator as Generator_own_dataset
 from tqdm import tqdm
 
-@tf.function
-def train_step(imgs1, imgs2, targets, net, optimizer):
-    with tf.GradientTape() as tape:
-        # 计算loss
-        prediction = net([imgs1, imgs2], training=True)
-        loss_value = tf.reduce_mean(K.binary_crossentropy(targets, prediction))
+# 防止bug
+def get_train_step_fn():
+    @tf.function
+    def train_step(imgs1, imgs2, targets, net, optimizer):
+        with tf.GradientTape() as tape:
+            # 计算loss
+            prediction = net([imgs1, imgs2], training=True)
+            loss_value = tf.reduce_mean(K.binary_crossentropy(targets, prediction))
 
-    grads = tape.gradient(loss_value, net.trainable_variables)
-    optimizer.apply_gradients(zip(grads, net.trainable_variables))
-    
-    equal = tf.equal(tf.round(prediction),targets)
-    accuracy = tf.reduce_mean(tf.cast(equal,tf.float32))
-    return loss_value, accuracy
+        grads = tape.gradient(loss_value, net.trainable_variables)
+        optimizer.apply_gradients(zip(grads, net.trainable_variables))
+        
+        equal = tf.equal(tf.round(prediction),targets)
+        accuracy = tf.reduce_mean(tf.cast(equal,tf.float32))
+        return loss_value, accuracy
+    return train_step
 
 @tf.function
 def val_step(imgs1, imgs2, targets, net, optimizer):
@@ -34,7 +37,7 @@ def val_step(imgs1, imgs2, targets, net, optimizer):
 
     return loss_value
 
-def fit_one_epoch(net, optimizer, epoch, epoch_size, epoch_size_val, gen, genval, Epoch):
+def fit_one_epoch(net, optimizer, epoch, epoch_size, epoch_size_val, gen, genval, Epoch, train_step):
     total_loss = 0
     val_loss = 0
     total_accuracy = 0
@@ -54,6 +57,7 @@ def fit_one_epoch(net, optimizer, epoch, epoch_size, epoch_size_val, gen, genval
             waste_time = time.time() - start_time
             pbar.set_postfix(**{'Total Loss'        : total_loss / (iteration + 1), 
                                 'Total accuracy'    : total_accuracy / (iteration + 1),
+                                'lr'                : optimizer._decayed_lr(tf.float32).numpy(),
                                 's/step'            : waste_time})
             pbar.update(1)
             start_time = time.time()
@@ -170,7 +174,7 @@ if __name__ == "__main__":
         optimizer = tf.keras.optimizers.Adam(learning_rate=lr_schedule)
 
         for epoch in range(Init_Epoch,Freeze_Epoch):
-            fit_one_epoch(model, optimizer, epoch, epoch_size, epoch_size_val, gen, gen_val, Freeze_Epoch)
+            fit_one_epoch(model, optimizer, epoch, epoch_size, epoch_size_val, gen, gen_val, Freeze_Epoch, get_train_step_fn())
 
 
     if True:
@@ -215,4 +219,4 @@ if __name__ == "__main__":
         optimizer = tf.keras.optimizers.Adam(learning_rate=lr_schedule)
         
         for epoch in range(Freeze_Epoch,Epoch):
-            fit_one_epoch(model, optimizer, epoch, epoch_size, epoch_size_val, gen, gen_val, Epoch)
+            fit_one_epoch(model, optimizer, epoch, epoch_size, epoch_size_val, gen, gen_val, Epoch, get_train_step_fn())
