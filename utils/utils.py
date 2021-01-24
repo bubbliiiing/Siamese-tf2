@@ -1,7 +1,9 @@
 
+import numpy as np
 from tensorflow import keras
 from tensorflow.keras import backend as K
-import numpy as np
+
+
 class ModelCheckpoint(keras.callbacks.Callback):
     def __init__(self, filepath, monitor='val_loss', verbose=0,
                  save_best_only=False, save_weights_only=False,

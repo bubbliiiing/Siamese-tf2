@@ -1,11 +1,16 @@
+import os
+
+import tensorflow as tf
+from tensorflow.keras.callbacks import (EarlyStopping, ReduceLROnPlateau,
+                                        TensorBoard)
+from tensorflow.keras.optimizers import SGD, Adam
+
 from nets.siamese import siamese
 from nets.siamese_training import Generator
-from nets.siamese_training_own_dataset import Generator as Generator_own_dataset
-from tensorflow.keras.callbacks import TensorBoard, ReduceLROnPlateau, EarlyStopping
-from tensorflow.keras.optimizers import Adam, SGD
+from nets.siamese_training_own_dataset import \
+    Generator as Generator_own_dataset
 from utils.utils import ModelCheckpoint
-import tensorflow as tf
-import os
+
 
 def get_image_num(path, train_own_data):
     num = 0
@@ -31,25 +36,40 @@ for gpu in gpus:
     tf.config.experimental.set_memory_growth(gpu, True)
 
 if __name__ == "__main__":
-    input_shape = [105,105,3]
-    dataset_path = "./datasets"
+    dataset_path = "datasets"
+    #----------------------------------------------------#
+    #   训练好的权值保存在logs文件夹里面
+    #----------------------------------------------------#
     log_dir = "logs/"
+    #----------------------------------------------------#
+    #   输入图像的大小，默认为105,105,3
+    #----------------------------------------------------#
+    input_shape = [105,105,3]
+    #----------------------------------------------------#
+    #   训练自己的数据的话需要把train_own_data设置成true
+    #   训练自己的数据和训练omniglot数据格式不一样
+    #----------------------------------------------------#
     train_own_data = False
 
     model = siamese(input_shape)
-    model.summary()
-
+    #------------------------------------------------------#
+    #   权值文件请看README，百度网盘下载
+    #------------------------------------------------------#
     model_path = 'model_data/vgg16_weights_tf_dim_ordering_tf_kernels_notop.h5'
     model.load_weights(model_path, by_name=True, skip_mismatch=True)
-    # 保存的方式，3世代保存一次
+    
+    #-------------------------------------------------------------------------------#
+    #   训练参数的设置
+    #   logging表示tensorboard的保存地址
+    #   checkpoint用于设置权值保存的细节，period用于修改多少epoch保存一次
+    #   reduce_lr用于设置学习率下降的方式
+    #   early_stopping用于设定早停，val_loss多次不下降自动结束训练，表示模型基本收敛
+    #-------------------------------------------------------------------------------#
+    tensorboard = TensorBoard(log_dir=log_dir)
     checkpoint_period = ModelCheckpoint(log_dir + 'ep{epoch:03d}-loss{loss:.3f}-val_loss{val_loss:.3f}.h5',
                                     monitor='val_loss', save_weights_only=True, save_best_only=False, period=1)
-    # 学习率下降的方式，acc三次不下降就下降学习率继续训练
     reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, verbose=1)
-    # 是否需要早停，当val_loss一直不下降的时候意味着模型基本训练完毕，可以停止
     early_stopping = EarlyStopping(monitor='val_loss', min_delta=0, patience=10, verbose=1)
-    # tensorboard
-    tensorboard = TensorBoard(log_dir=log_dir)
 
     train_ratio = 0.9
     images_num = get_image_num(dataset_path, train_own_data)
@@ -57,11 +77,10 @@ if __name__ == "__main__":
     val_num = int(images_num*0.1)
     
     if True:
-        # 交叉熵
         Batch_size = 32
         Lr = 1e-3
         Init_epoch = 0
-        Freeze_epoch = 25
+        Freeze_epoch = 50
         
         model.compile(loss = "binary_crossentropy",
                 optimizer = Adam(lr=Lr),
@@ -73,7 +92,6 @@ if __name__ == "__main__":
         else:
             gen = Generator(input_shape, dataset_path, Batch_size, train_ratio)
             
-        # 开始训练
         model.fit(gen.generate(True),
                 steps_per_epoch=max(1,train_num//Batch_size),
                 validation_data=gen.generate(True),
@@ -83,11 +101,10 @@ if __name__ == "__main__":
                 callbacks=[checkpoint_period, reduce_lr, early_stopping, tensorboard])
     
     if True:
-        # 交叉熵
         Batch_size = 32
         Lr = 1e-4
-        Freeze_epoch = 25
-        Epoch = 50
+        Freeze_epoch = 50
+        Epoch = 100
         
         model.compile(loss = "binary_crossentropy",
                 optimizer = Adam(lr=Lr),
@@ -98,7 +115,7 @@ if __name__ == "__main__":
             gen = Generator_own_dataset(input_shape, dataset_path, Batch_size, train_ratio)
         else:
             gen = Generator(input_shape, dataset_path, Batch_size, train_ratio)
-        # 开始训练
+            
         model.fit_generator(gen.generate(True),
                 steps_per_epoch=max(1,train_num//Batch_size),
                 validation_data=gen.generate(True),
