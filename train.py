@@ -12,25 +12,34 @@ from utils.callbacks import ModelCheckpoint
 from utils.utils_fit import fit_one_epoch
 
 
+#----------------------------------------------------#
+#   计算图片总数
+#----------------------------------------------------#
 def get_image_num(path, train_own_data):
     num = 0
     if train_own_data:
         train_path = os.path.join(path, 'images_background')
         for character in os.listdir(train_path):
-            # 在大众类下遍历小种类。
+            #----------------------------------------------------#
+            #   在大众类下遍历小种类。
+            #----------------------------------------------------#
             character_path = os.path.join(train_path, character)
             num += len(os.listdir(character_path))
     else:
         train_path = os.path.join(path, 'images_background')
         for alphabet in os.listdir(train_path):
-            # 然后遍历images_background下的每一个文件夹，代表一个大种类
+            #-------------------------------------------------------------#
+            #   然后遍历images_background下的每一个文件夹，代表一个大种类
+            #-------------------------------------------------------------#
             alphabet_path = os.path.join(train_path, alphabet)
             for character in os.listdir(alphabet_path):
-                # 在大众类下遍历小种类。
+                #----------------------------------------------------#
+                #   在大众类下遍历小种类。
+                #----------------------------------------------------#
                 character_path = os.path.join(alphabet_path, character)
                 num += len(os.listdir(character_path))
     return num
-
+  
 gpus = tf.config.experimental.list_physical_devices(device_type='GPU')
 for gpu in gpus:
     tf.config.experimental.set_memory_growth(gpu, True)
