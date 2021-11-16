@@ -125,14 +125,14 @@ if __name__ == "__main__":
         Lr              = 1e-4
         Init_epoch      = 0
         Freeze_epoch    = 50
-        
-        generator = Generator(input_shape, dataset_path, Batch_size, train_ratio, train_own_data)
             
         epoch_step          = num_train // Batch_size
         epoch_step_val      = num_val // Batch_size
 
         if epoch_step == 0 or epoch_step_val == 0:
             raise ValueError('数据集过小，无法进行训练，请扩充数据集。')
+        
+        generator = Generator(input_shape, dataset_path, Batch_size, train_ratio, train_own_data)
 
         print('Train with batch size {}.'.format(Batch_size))
         if eager:
@@ -168,14 +168,14 @@ if __name__ == "__main__":
         Lr              = 1e-5
         Freeze_epoch    = 50
         Epoch           = 100
-
-        generator = Generator(input_shape, dataset_path, Batch_size, train_ratio, train_own_data)
             
         epoch_step          = num_train // Batch_size
         epoch_step_val      = num_val // Batch_size
 
         if epoch_step == 0 or epoch_step_val == 0:
             raise ValueError('数据集过小，无法进行训练，请扩充数据集。')
+
+        generator = Generator(input_shape, dataset_path, Batch_size, train_ratio, train_own_data)
 
         print('Train with batch size {}.'.format(Batch_size))
         if eager:
