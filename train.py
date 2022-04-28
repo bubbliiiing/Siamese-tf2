@@ -1,8 +1,10 @@
 import datetime
 import os
+from functools import partial
 
 import numpy as np
 import tensorflow as tf
+import tensorflow.keras.backend as K
 from tensorflow.keras.callbacks import LearningRateScheduler, TensorBoard
 from tensorflow.keras.optimizers import SGD, Adam
 
@@ -10,8 +12,13 @@ from nets.siamese import siamese
 from utils.callbacks import LossHistory, ModelCheckpoint
 from utils.dataloader import Datasets
 from utils.utils import get_lr_scheduler, load_dataset
+from utils.utils_fit import fit_one_epoch
 
 if __name__ == "__main__":
+    #----------------------------------------------------#
+    #   是否使用eager模式训练
+    #----------------------------------------------------#
+    eager           = False
     #---------------------------------------------------------------------#
     #   train_gpu   训练用到的GPU
     #               默认为第一张卡、双卡为[0, 1]、三卡为[0, 1, 2]
@@ -127,6 +134,12 @@ if __name__ == "__main__":
     gpus = tf.config.experimental.list_physical_devices(device_type='GPU')
     for gpu in gpus:
         tf.config.experimental.set_memory_growth(gpu, True)
+    
+    #------------------------------------------------------#
+    #   判断当前使用的GPU数量与机器上实际的GPU数量
+    #------------------------------------------------------#
+    if ngpus_per_node > 1 and ngpus_per_node > len(gpus):
+        raise ValueError("The number of GPUs specified for training is more than the GPUs on the machine")
         
     if ngpus_per_node > 1:
         strategy = tf.distribute.MirroredStrategy()
@@ -176,11 +189,7 @@ if __name__ == "__main__":
             'adam'  : Adam(lr = Init_lr_fit, beta_1 = momentum),
             'sgd'   : SGD(lr = Init_lr_fit, momentum = momentum, nesterov=True)
         }[optimizer_type]
-        if ngpus_per_node > 1:
-            with strategy.scope():
-                model.compile(loss = "binary_crossentropy", optimizer = optimizer, metrics = ["binary_accuracy"])
-        else:
-            model.compile(loss = "binary_crossentropy", optimizer = optimizer, metrics = ["binary_accuracy"])
+        
         #---------------------------------------#
         #   获得学习率下降的公式
         #---------------------------------------#
@@ -194,32 +203,63 @@ if __name__ == "__main__":
 
         train_dataset    = Datasets(input_shape, train_lines, train_labels, batch_size, True)
         val_dataset      = Datasets(input_shape, val_lines, val_labels, batch_size, False)
-
-        #-------------------------------------------------------------------------------#
-        #   训练参数的设置
-        #   logging         用于设置tensorboard的保存地址
-        #   checkpoint      用于设置权值保存的细节，period用于修改多少epoch保存一次
-        #   lr_scheduler       用于设置学习率下降的方式
-        #   early_stopping  用于设定早停，val_loss多次不下降自动结束训练，表示模型基本收敛
-        #-------------------------------------------------------------------------------#
-        time_str        = datetime.datetime.strftime(datetime.datetime.now(),'%Y_%m_%d_%H_%M_%S')
-        log_dir         = os.path.join(save_dir, "loss_" + str(time_str))
-        logging         = TensorBoard(log_dir)
-        loss_history    = LossHistory(log_dir)
-        checkpoint      = ModelCheckpoint(os.path.join(save_dir, "ep{epoch:03d}-loss{loss:.3f}-val_loss{val_loss:.3f}.h5"), 
-                                monitor = 'val_loss', save_weights_only = True, save_best_only = False, period = save_period)
-        lr_scheduler    = LearningRateScheduler(lr_scheduler_func, verbose = 1)
-        callbacks       = [logging, loss_history, checkpoint, lr_scheduler]
         
-        print('Train on {} samples, val on {} samples, with batch size {}.'.format(num_train, num_val, batch_size))
-        model.fit(
-            x                   = train_dataset,
-            steps_per_epoch     = epoch_step,
-            validation_data     = val_dataset,
-            validation_steps    = epoch_step_val,
-            epochs              = Epoch,
-            initial_epoch       = Init_Epoch,
-            use_multiprocessing = True if num_workers > 1 else False,
-            workers             = num_workers,
-            callbacks           = callbacks
-        )
+        if eager:
+            gen     = tf.data.Dataset.from_generator(partial(train_dataset.generate), (tf.float32, tf.float32))
+            gen_val = tf.data.Dataset.from_generator(partial(val_dataset.generate), (tf.float32, tf.float32))
+
+            gen     = gen.shuffle(buffer_size = batch_size).prefetch(buffer_size = batch_size)
+            gen_val = gen_val.shuffle(buffer_size = batch_size).prefetch(buffer_size = batch_size)
+            
+            if ngpus_per_node > 1:
+                gen     = strategy.experimental_distribute_dataset(gen)
+                gen_val = strategy.experimental_distribute_dataset(gen_val)
+
+            time_str        = datetime.datetime.strftime(datetime.datetime.now(),'%Y_%m_%d_%H_%M_%S')
+            log_dir         = os.path.join(save_dir, "loss_" + str(time_str))
+            loss_history    = LossHistory(log_dir)
+                
+            for epoch in range(Init_Epoch, Epoch):
+                lr = lr_scheduler_func(epoch)
+                K.set_value(optimizer.lr, lr)
+                
+                fit_one_epoch(model, optimizer, epoch, epoch_step, epoch_step_val, gen, gen_val, Epoch, save_period, save_dir, strategy)
+
+                train_dataset.on_epoch_end()
+                val_dataset.on_epoch_end()
+            
+        else:
+            if ngpus_per_node > 1:
+                with strategy.scope():
+                    model.compile(loss = "binary_crossentropy", optimizer = optimizer, metrics = ["binary_accuracy"])
+            else:
+                model.compile(loss = "binary_crossentropy", optimizer = optimizer, metrics = ["binary_accuracy"])
+
+            #-------------------------------------------------------------------------------#
+            #   训练参数的设置
+            #   logging         用于设置tensorboard的保存地址
+            #   checkpoint      用于设置权值保存的细节，period用于修改多少epoch保存一次
+            #   lr_scheduler       用于设置学习率下降的方式
+            #   early_stopping  用于设定早停，val_loss多次不下降自动结束训练，表示模型基本收敛
+            #-------------------------------------------------------------------------------#
+            time_str        = datetime.datetime.strftime(datetime.datetime.now(),'%Y_%m_%d_%H_%M_%S')
+            log_dir         = os.path.join(save_dir, "loss_" + str(time_str))
+            logging         = TensorBoard(log_dir)
+            loss_history    = LossHistory(log_dir)
+            checkpoint      = ModelCheckpoint(os.path.join(save_dir, "ep{epoch:03d}-loss{loss:.3f}-val_loss{val_loss:.3f}.h5"), 
+                                    monitor = 'val_loss', save_weights_only = True, save_best_only = False, period = save_period)
+            lr_scheduler    = LearningRateScheduler(lr_scheduler_func, verbose = 1)
+            callbacks       = [logging, loss_history, checkpoint, lr_scheduler]
+            
+            print('Train on {} samples, val on {} samples, with batch size {}.'.format(num_train, num_val, batch_size))
+            model.fit(
+                x                   = train_dataset,
+                steps_per_epoch     = epoch_step,
+                validation_data     = val_dataset,
+                validation_steps    = epoch_step_val,
+                epochs              = Epoch,
+                initial_epoch       = Init_Epoch,
+                use_multiprocessing = True if num_workers > 1 else False,
+                workers             = num_workers,
+                callbacks           = callbacks
+            )
