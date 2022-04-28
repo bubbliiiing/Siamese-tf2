@@ -74,6 +74,50 @@ class Datasets(keras.utils.Sequence):
         images, labels = self._convert_path_list_to_images_and_labels(batch_images_path)
         return images, labels
     
+    def generate(self):
+        while 1:
+            batch_images_path = []
+            for _ in range(self.batch_size):
+                #------------------------------------------#
+                #   首先选取三张类别相同的图片
+                #------------------------------------------#
+                c               = random.randint(0, self.types - 1)
+                selected_path   = self.train_lines[self.train_labels[:] == c]
+                while len(selected_path) < 3:
+                    c               = random.randint(0, self.types - 1)
+                    selected_path   = self.train_lines[self.train_labels[:] == c]
+
+                image_indexes = random.sample(range(0, len(selected_path)), 3)
+                #------------------------------------------#
+                #   取出两张类似的图片
+                #   对于这两张图片，网络应当输出1
+                #------------------------------------------#
+                batch_images_path.append(selected_path[image_indexes[0]])
+                batch_images_path.append(selected_path[image_indexes[1]])
+
+                #------------------------------------------#
+                #   取出两张不类似的图片
+                #------------------------------------------#
+                batch_images_path.append(selected_path[image_indexes[2]])
+                #------------------------------------------#
+                #   取出与当前的小类别不同的类
+                #------------------------------------------#
+                different_c         = list(range(self.types))
+                different_c.pop(c)
+                different_c_index   = np.random.choice(range(0, self.types - 1), 1)
+                current_c           = different_c[different_c_index[0]]
+                selected_path       = self.train_lines[self.train_labels == current_c]
+                while len(selected_path) < 1:
+                    different_c_index   = np.random.choice(range(0, self.types - 1), 1)
+                    current_c           = different_c[different_c_index[0]]
+                    selected_path       = self.train_lines[self.train_labels == current_c]
+
+                image_indexes       = random.sample(range(0, len(selected_path)), 1)
+                batch_images_path.append(selected_path[image_indexes[0]])
+
+            images, labels = self._convert_path_list_to_images_and_labels(batch_images_path)
+            yield images, labels
+
     def _convert_path_list_to_images_and_labels(self, path_list):
         #-------------------------------------------#
         #   如果batch_size = 16
