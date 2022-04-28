@@ -24,7 +24,13 @@ tensorflow-gpu==2.2.0
 
 ## 文件下载
 训练所需的vgg16_weights_tf_dim_ordering_tf_kernels_notop.h5可在百度网盘中下载。    
-链接: https://pan.baidu.com/s/1Jy5OGg1CaddduLmEHzON2A 提取码: 9ij5    
+链接: https://pan.baidu.com/s/1NH3wcVr98vyJLYhYBTglvg 提取码: xyg2    
+
+Omniglot数据集下载地址为：
+链接: https://pan.baidu.com/s/1pYp6vqiLLRFLn1tVeRk8ZQ 提取码: 5sa7     
+
+人脸数据集下载地址为（格式还需要简单修改一下才可以使用，请参考下方“训练自己相似性比较的模型”的格式进行修改）：
+链接: https://pan.baidu.com/s/1OvEFXTUZrvu4T5qSPkHOJw 提取码: aqhg     
 
 我一共会提供两个权重，分别是vgg16_weights_tf_dim_ordering_tf_kernels_notop.h5和Omniglot_vgg.h5。   
 其中:  
