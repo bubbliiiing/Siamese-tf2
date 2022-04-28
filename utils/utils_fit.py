@@ -1,10 +1,14 @@
+import os
+
 import tensorflow as tf
 import tensorflow.keras.backend as K
 from tqdm import tqdm
 
 
-# 防止bug
-def get_train_step_fn():
+#----------------------#
+#   防止bug
+#----------------------#
+def get_train_step_fn(strategy):
     @tf.function
     def train_step(imgs1, imgs2, targets, net, optimizer):
         with tf.GradientTape() as tape:
@@ -17,20 +21,46 @@ def get_train_step_fn():
         equal       = tf.equal(tf.round(prediction),targets)
         accuracy    = tf.reduce_mean(tf.cast(equal,tf.float32))
         return loss_value, accuracy
-    return train_step
 
-@tf.function
-def val_step(imgs1, imgs2, targets, net, optimizer):
-    prediction = net([imgs1, imgs2], training=False)
-    loss_value = tf.reduce_mean(K.binary_crossentropy(targets, prediction))
+    if strategy == None:
+        return train_step
+    else:
+        #----------------------#
+        #   多gpu训练
+        #----------------------#
+        @tf.function
+        def distributed_train_step(imgs1, imgs2, targets, net, optimizer):
+            per_replica_losses, per_replica_acc = strategy.run(train_step, args=(imgs1, imgs2, targets, net, optimizer,))
+            return strategy.reduce(tf.distribute.ReduceOp.MEAN, per_replica_losses, axis=None), strategy.reduce(tf.distribute.ReduceOp.MEAN, per_replica_acc, axis=None)
+        return distributed_train_step
 
-    return loss_value
-
-def fit_one_epoch(net, optimizer, epoch, epoch_step, epoch_step_val, gen, genval, Epoch):
-    train_step      = get_train_step_fn()
+#----------------------#
+#   防止bug
+#----------------------#
+def get_val_step_fn(strategy):
+    @tf.function
+    def val_step(imgs1, imgs2, targets, net, optimizer):
+        prediction = net([imgs1, imgs2], training=False)
+        loss_value = tf.reduce_mean(K.binary_crossentropy(targets, prediction))
+        return loss_value
+    if strategy == None:
+        return val_step
+    else:
+        #----------------------#
+        #   多gpu验证
+        #----------------------#
+        @tf.function
+        def distributed_val_step(imgs1, imgs2, targets, net, optimizer):
+            per_replica_losses = strategy.run(val_step, args=(imgs1, imgs2, targets, net, optimizer,))
+            return strategy.reduce(tf.distribute.ReduceOp.MEAN, per_replica_losses, axis=None)
+        return distributed_val_step
+    
+def fit_one_epoch(net, optimizer, epoch, epoch_step, epoch_step_val, gen, genval, Epoch, save_period, save_dir, strategy):
+    train_step  = get_train_step_fn(strategy)
+    val_step    = get_val_step_fn(strategy)
+    
     total_loss      = 0
     total_accuracy  = 0
-
     val_loss        = 0
     print('Start Train')
     with tqdm(total=epoch_step,desc=f'Epoch {epoch + 1}/{Epoch}',postfix=dict,mininterval=0.3) as pbar:
@@ -39,8 +69,7 @@ def fit_one_epoch(net, optimizer, epoch, epoch_step, epoch_step_val, gen, genval
                 break
             images, targets     = batch[0], batch[1]
             images0, images1    = images[0], images[1]
-            targets = tf.cast(tf.convert_to_tensor(targets), tf.float32)
-
+            
             loss_value, accuracy = train_step(images0, images1, targets, net, optimizer)
             total_loss      += loss_value.numpy()
             total_accuracy  += accuracy.numpy()
@@ -58,7 +87,6 @@ def fit_one_epoch(net, optimizer, epoch, epoch_step, epoch_step_val, gen, genval
                 break
             images, targets     = batch[0], batch[1]
             images0, images1    = images[0], images[1]
-            targets = tf.convert_to_tensor(targets)
 
             loss_value = val_step(images0, images1, targets, net, optimizer)
             val_loss = val_loss + loss_value.numpy()
@@ -69,4 +97,5 @@ def fit_one_epoch(net, optimizer, epoch, epoch_step, epoch_step_val, gen, genval
 
     print('Epoch:'+ str(epoch+1) + '/' + str(Epoch))
     print('Total Loss: %.3f || Val Loss: %.3f ' % (total_loss / epoch_step, val_loss / epoch_step_val))
-    net.save_weights('logs/ep%03d-loss%.3f-val_loss%.3f.h5' % (epoch + 1, total_loss / epoch_step, val_loss / epoch_step_val))
+    if (epoch + 1) % save_period == 0 or epoch + 1 == Epoch:
+        net.save_weights(os.path.join(save_dir, 'ep%03d-loss%.3f-val_loss%.3f.h5' % (epoch + 1, total_loss / epoch_step, val_loss / epoch_step_val)))

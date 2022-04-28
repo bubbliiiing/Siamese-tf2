@@ -6,6 +6,7 @@ import tensorflow as tf
 from PIL import Image
 
 from nets.siamese import siamese
+from utils.utils import letterbox_image, preprocess_input, cvtColor
 
 
 #---------------------------------------------------#
@@ -17,11 +18,16 @@ class Siamese(object):
         #   使用自己训练好的模型进行预测一定要修改model_path
         #   model_path指向logs文件夹下的权值文件
         #-----------------------------------------------------#
-        "model_path"    : 'model_data/Omniglot_vgg.h5',
+        "model_path"        : 'model_data/Omniglot_vgg.h5',
         #-----------------------------------------------------#
         #   输入图片的大小。
         #-----------------------------------------------------#
-        "input_shape"   : (105, 105, 3),
+        "input_shape"       : [105, 105],
+        #--------------------------------------------------------------------#
+        #   该变量用于控制是否使用letterbox_image对输入图像进行不失真的resize
+        #   否则对图像进行CenterCrop
+        #--------------------------------------------------------------------#
+        "letterbox_image"   : False,
     }
 
     @classmethod
@@ -47,24 +53,9 @@ class Siamese(object):
         #---------------------------#
         #   载入模型与权值
         #---------------------------#
-        self.model = siamese(self.input_shape)
+        self.model = siamese([self.input_shape[0], self.input_shape[1], 3])
         self.model.load_weights(self.model_path)
         print('{} model loaded.'.format(model_path))
-    
-    def letterbox_image(self, image, size):
-        image   = image.convert("RGB")
-        iw, ih  = image.size
-        w, h    = size
-        scale   = min(w/iw, h/ih)
-        nw      = int(iw*scale)
-        nh      = int(ih*scale)
-
-        image       = image.resize((nw,nh), Image.BICUBIC)
-        new_image   = Image.new('RGB', size, (255,255,255))
-        new_image.paste(image, ((w-nw)//2, (h-nh)//2))
-        if self.input_shape[-1]==1:
-            new_image = new_image.convert("L")
-        return new_image
         
     @tf.function
     def get_pred(self, photo):
@@ -75,28 +66,24 @@ class Siamese(object):
     #   检测图片
     #---------------------------------------------------#
     def detect_image(self, image_1, image_2):
+        #---------------------------------------------------------#
+        #   在这里将图像转换成RGB图像，防止灰度图在预测时报错。
+        #---------------------------------------------------------#
+        image_1 = cvtColor(image_1)
+        image_2 = cvtColor(image_2)
+        
         #---------------------------------------------------#
         #   对输入图像进行不失真的resize
         #---------------------------------------------------#
-        image_1 = self.letterbox_image(image_1,[self.input_shape[1],self.input_shape[0]])
-        image_2 = self.letterbox_image(image_2,[self.input_shape[1],self.input_shape[0]])
+        image_1 = letterbox_image(image_1, [self.input_shape[1], self.input_shape[0]], self.letterbox_image)
+        image_2 = letterbox_image(image_2, [self.input_shape[1], self.input_shape[0]], self.letterbox_image)
         
-        #---------------------------------------------------#
-        #   对输入图像进行归一化
-        #---------------------------------------------------#
-        image_1 = np.asarray(image_1).astype(np.float64) / 255
-        image_2 = np.asarray(image_2).astype(np.float64) / 255
+        #---------------------------------------------------------#
+        #   归一化+添加上batch_size维度
+        #---------------------------------------------------------#
+        photo1  = np.expand_dims(preprocess_input(np.array(image_1, np.float32)), 0)
+        photo2  = np.expand_dims(preprocess_input(np.array(image_2, np.float32)), 0)
         
-        if self.input_shape[-1]==1:
-            image_1 = np.expand_dims(image_1, -1)
-            image_2 = np.expand_dims(image_2, -1)
-            
-        #---------------------------------------------------#
-        #   添加上batch维度，才可以放入网络中预测
-        #---------------------------------------------------#
-        photo1 = np.expand_dims(image_1,0)
-        photo2 = np.expand_dims(image_2,0)
-
         #---------------------------------------------------#
         #   获得预测结果，output输出为概率
         #---------------------------------------------------#
