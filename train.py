@@ -223,7 +223,7 @@ if __name__ == "__main__":
                 lr = lr_scheduler_func(epoch)
                 K.set_value(optimizer.lr, lr)
                 
-                fit_one_epoch(model, optimizer, epoch, epoch_step, epoch_step_val, gen, gen_val, Epoch, save_period, save_dir, strategy)
+                fit_one_epoch(model, loss_history, optimizer, epoch, epoch_step, epoch_step_val, gen, gen_val, Epoch, save_period, save_dir, strategy)
 
                 train_dataset.on_epoch_end()
                 val_dataset.on_epoch_end()
