@@ -116,7 +116,7 @@ class Datasets(keras.utils.Sequence):
                 batch_images_path.append(selected_path[image_indexes[0]])
 
             images, labels = self._convert_path_list_to_images_and_labels(batch_images_path)
-            yield images, labels
+            yield images[0], images[1], labels
 
     def _convert_path_list_to_images_and_labels(self, path_list):
         #-------------------------------------------#

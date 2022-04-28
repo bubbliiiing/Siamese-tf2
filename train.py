@@ -205,8 +205,8 @@ if __name__ == "__main__":
         val_dataset      = Datasets(input_shape, val_lines, val_labels, batch_size, False)
         
         if eager:
-            gen     = tf.data.Dataset.from_generator(partial(train_dataset.generate), (tf.float32, tf.float32))
-            gen_val = tf.data.Dataset.from_generator(partial(val_dataset.generate), (tf.float32, tf.float32))
+            gen     = tf.data.Dataset.from_generator(partial(train_dataset.generate), (tf.float32, tf.float32, tf.float32))
+            gen_val = tf.data.Dataset.from_generator(partial(val_dataset.generate), (tf.float32, tf.float32, tf.float32))
 
             gen     = gen.shuffle(buffer_size = batch_size).prefetch(buffer_size = batch_size)
             gen_val = gen_val.shuffle(buffer_size = batch_size).prefetch(buffer_size = batch_size)

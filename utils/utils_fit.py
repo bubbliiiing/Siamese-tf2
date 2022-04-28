@@ -67,8 +67,7 @@ def fit_one_epoch(net, loss_history, optimizer, epoch, epoch_step, epoch_step_va
         for iteration, batch in enumerate(gen):
             if iteration >= epoch_step:
                 break
-            images, targets     = batch[0], batch[1]
-            images0, images1    = images[0], images[1]
+            images0, images1, targets = batch[0], batch[1], batch[2]
             
             loss_value, accuracy = train_step(images0, images1, targets, net, optimizer)
             total_loss      += loss_value.numpy()
@@ -85,8 +84,7 @@ def fit_one_epoch(net, loss_history, optimizer, epoch, epoch_step, epoch_step_va
         for iteration, batch in enumerate(genval):
             if iteration >= epoch_step_val:
                 break
-            images, targets     = batch[0], batch[1]
-            images0, images1    = images[0], images[1]
+            images0, images1, targets = batch[0], batch[1], batch[2]
 
             loss_value = val_step(images0, images1, targets, net, optimizer)
             val_loss = val_loss + loss_value.numpy()
